@@ -12,7 +12,6 @@ export function Header({ tonUsd }: { tonUsd: number }) {
           <div className="leading-none">
             <div className="flex items-center font-arcade text-2xl leading-none tracking-wide text-god-cream text-glow">
               bid<span className="text-god-goldDeep">.tg</span>
-              <span className="ml-1 inline-block h-4 w-2 animate-blink bg-god-goldDeep" />
             </div>
             <div className="mt-0.5 flex items-center gap-1 text-[10px] text-god-faint">
               <TonIcon size={9} className="text-god-goldDeep" />

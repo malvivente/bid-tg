@@ -1,7 +1,7 @@
 import type { FeeQuote } from '@/types';
 
 /**
- * god.tg fee engine — the single source of truth for pricing.
+ * bid.tg fee engine — the single source of truth for pricing.
  *
  * Amounts are nanoTON (bigint) internally; 1 TON = 1_000_000_000n.
  *

@@ -53,7 +53,7 @@ export interface TxMessage {
 /** Fee breakdown returned by the fee engine / backend quote. */
 export interface FeeQuote {
   costNano: bigint; // what Fragment / the auction charges
-  feeNano: bigint; // god.tg fee
+  feeNano: bigint; // bid.tg fee
   totalNano: bigint; // cost + fee
   /** effective fee as a % of cost, for transparent display */
   effectivePct: number;

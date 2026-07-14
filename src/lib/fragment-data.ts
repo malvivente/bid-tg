@@ -52,7 +52,7 @@ async function mapLimit<I, O>(items: I[], limit: number, fn: (item: I) => Promis
  * Live, non-custodial data straight from TonAPI (no backend needed for reads).
  * The +5% bid step is the on-chain Fragment default; we compute the TRUE next
  * minimum in integer nanoTON (ceil) rather than the whole-TON figure fragment.com
- * shows — that difference is the god.tg discount.
+ * shows — that difference is the bid.tg discount.
  */
 const DEFAULT_BID_STEP = 0.05;
 

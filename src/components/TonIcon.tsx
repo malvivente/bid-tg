@@ -6,7 +6,7 @@ interface Props {
 /**
  * GRAM currency glyph — the current Fragment.com currency icon (Toncoin was
  * renamed GRAM in 2026). Sourced from fragment.com's `--image-url-ton-icon`.
- * Uses currentColor so it inherits the god.tg gold theme.
+ * Uses currentColor so it inherits the bid.tg white/neon theme.
  */
 export function GramIcon({ className, size = 16 }: Props) {
   const height = size;

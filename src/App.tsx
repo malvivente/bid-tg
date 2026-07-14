@@ -33,7 +33,7 @@ function AppContent() {
       <Header tonUsd={tonUsd} />
       <main
         key={tab}
-        className="animate-fade-up pb-[86px] pt-[calc(58px+var(--safe-top))]"
+        className="animate-fade-up pb-[calc(86px+var(--safe-bottom))] pt-[calc(58px+var(--safe-top))]"
       >
         {tab === 'auctions' && <AuctionsSection />}
         {tab === 'numbers' && <NumbersSection tonUsd={tonUsd} />}

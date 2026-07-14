@@ -6,8 +6,33 @@
   :root {
     --tg-viewport-height: 100vh;
     --tg-viewport-stable-height: 100vh;
-    --safe-top: env(safe-area-inset-top, 0px);
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+    /* SAFE AREAS (fullscreen-ready).
+     * Telegram (Bot API 8.0+) publishes two INDEPENDENT sets of insets as CSS vars:
+     *   --tg-safe-area-inset-*          → the device notch / home indicator
+     *   --tg-content-safe-area-inset-*  → Telegram's OWN floating controls (close/menu),
+     *                                     which overlay the app in fullscreen mode
+     * They don't overlap, so clearing Telegram's UI means clearing BOTH: pad by the notch,
+     * then add the controls on top. Padding by only one leaves content under the other.
+     *
+     * `max(env(...), --tg-safe-area-...)` instead of adding them: the webview's own
+     * env(safe-area-inset-*) reports the SAME physical notch, so summing would double-count
+     * it. max() takes whichever source knows about it.
+     *
+     * On clients below 8.0 the --tg-* vars are never defined, so the 0px fallbacks make this
+     * collapse to plain env() — i.e. it degrades to the old behaviour, and in a normal
+     * browser everything is simply 0. */
+    --safe-top: calc(
+      max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px)) +
+        var(--tg-content-safe-area-inset-top, 0px)
+    );
+    --safe-bottom: calc(
+      max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px)) +
+        var(--tg-content-safe-area-inset-bottom, 0px)
+    );
+    --safe-left: max(env(safe-area-inset-left, 0px), var(--tg-safe-area-inset-left, 0px));
+    --safe-right: max(env(safe-area-inset-right, 0px), var(--tg-safe-area-inset-right, 0px));
+
     /* the bid.tg neon accent, reused across effects */
     --neon: #5ffbf1;
   }
@@ -78,6 +103,9 @@
 @layer components {
   .container-app {
     @apply mx-auto w-full max-w-[520px] px-4;
+    /* keep the 1rem gutter, but grow it if a landscape notch eats into the sides */
+    padding-left: max(1rem, var(--safe-left));
+    padding-right: max(1rem, var(--safe-right));
   }
 
   /* Terminal panel: hairline white border, faint cyan wash, subtle inner highlight */

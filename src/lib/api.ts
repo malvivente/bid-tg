@@ -11,7 +11,7 @@ import {
 } from './fragment-resolve';
 
 /**
- * god.tg backend client.
+ * bid.tg backend client.
  *
  * When VITE_API_BASE_URL is set, calls the real Fastify backend (which owns the
  * Fragment session cookies + operator wallet). When empty, a built-in MOCK layer

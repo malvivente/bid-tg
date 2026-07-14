@@ -87,13 +87,13 @@ export function ProfileSection() {
       <div className="flex flex-col gap-2 pt-1">
         <a href="https://fragment.com/about" target="_blank" rel="noreferrer" className="btn-ghost justify-between">
           <span className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-god-gold/70" /> How god.tg works
+            <ShieldCheck className="h-4 w-4 text-god-gold/70" /> How bid.tg works
           </span>
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
       </div>
 
-      <p className="pb-2 text-center text-[10px] text-god-faint">god.tg · powered by TON &amp; Fragment</p>
+      <p className="pb-2 text-center text-[10px] text-god-faint">bid.tg · powered by TON &amp; Fragment</p>
     </div>
   );
 }
