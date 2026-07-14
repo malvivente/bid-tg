@@ -171,6 +171,72 @@ export async function fetchAuctionState(domain: string): Promise<AuctionState | 
 // the ROOT of the trace (the one whose in_msg is external). We only trace those.
 const USERNAMES_COLLECTION = '0:80d78a35f955a14b679faa887ff4cd5bfc0f43b4a4eea2a7e6927f3701b273c2';
 
+// ── "Auction an NFT I own" — asset discovery ─────────────────────────────────
+export interface OwnedItem {
+  nftAddress: string; // raw 0:… — the telemint item contract; also the tx target for start_auction
+  name: string; // e.g. "@myname"
+  username: string; // "myname"
+  image?: string;
+}
+
+/**
+ * The usernames a wallet directly owns. `indirect_ownership=false` is deliberate: it excludes
+ * items parked in a Getgems sale contract (whose on-chain owner is the marketplace, not the
+ * wallet — those can't be auctioned by us until delisted). An item that is ALREADY on a
+ * telemint auction still appears here (telemint keeps ownership on the item, doesn't set
+ * `sale`) — so auctionability is decided per-item on-chain via startability(), not here.
+ */
+export async function fetchOwnedUsernames(wallet: string): Promise<OwnedItem[]> {
+  return memo(`owned:${wallet}`, 20_000, async () => {
+    try {
+      const items: OwnedItem[] = [];
+      for (let offset = 0; offset < 1000; offset += 200) {
+        const url = `${TONAPI}/v2/accounts/${encodeURIComponent(wallet)}/nfts?collection=${USERNAMES_COLLECTION}&limit=200&offset=${offset}&indirect_ownership=false`;
+        const res = await fetch(url);
+        if (!res.ok) break;
+        const rows: any[] = (await res.json()).nft_items ?? [];
+        for (const it of rows) {
+          if (it.sale) continue; // parked on a marketplace → not ours to auction
+          const name: string = it.metadata?.name ?? (it.dns ? '@' + String(it.dns).replace(/\.t\.me$/, '') : '');
+          if (!it.address || !name) continue;
+          items.push({
+            nftAddress: it.address,
+            name,
+            username: name.replace(/^@/, ''),
+            image: it.previews?.[0]?.url ?? it.metadata?.image,
+          });
+        }
+        if (rows.length < 200) break;
+      }
+      return items.sort((a, b) => a.username.localeCompare(b.username));
+    } catch {
+      return [];
+    }
+  });
+}
+
+export type Startability = 'free' | 'on_auction' | 'unknown';
+
+/**
+ * Can an auction be STARTED on this item right now? The only sound signal is on-chain:
+ * `get_telemint_auction_state` throwing exit 219 (`no_auction`) means startable; a clean
+ * exit 0 means an auction already exists (live OR ended-pending-finalization) and start
+ * would revert. Anything else → unknown (don't claim it's free). Never infer this from
+ * TonAPI's `sale`/owner fields — a telemint auction is invisible to them.
+ */
+export async function startability(nftAddress: string): Promise<Startability> {
+  try {
+    const res = await fetch(`${TONAPI}/v2/blockchain/accounts/${encodeURIComponent(nftAddress)}/methods/get_telemint_auction_state`);
+    if (!res.ok) return 'unknown';
+    const j = await res.json();
+    if (j.success === true && j.exit_code === 0) return 'on_auction';
+    if (j.exit_code === 219) return 'free';
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 function bidderName(b: { address?: string; name?: string }): string {
   if (b.name) return '@' + b.name.replace(/\.t\.me$/, '');
   return shortAddr(rawToFriendly(b.address ?? ''));

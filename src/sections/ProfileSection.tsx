@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react';
 import { useTonAddress, useTonWallet } from '@tonconnect/ui-react';
-import { Wallet, Star, Crown, Gavel, ShieldCheck, ExternalLink, Receipt } from 'lucide-react';
+import { Wallet, Star, Crown, Gavel, ShieldCheck, ExternalLink, Receipt, Package } from 'lucide-react';
 import { ConnectButton } from '@/components/ConnectButton';
-import { EmptyState } from '@/components/ui';
+import { EmptyState, Skeleton } from '@/components/ui';
+import { AuctionItemSheet } from '@/components/auctions/AuctionItemSheet';
 import { getTgUser } from '@/lib/telegram';
+import { fetchOwnedUsernames, type OwnedItem } from '@/lib/fragment-data';
 import { shortAddr } from '@/lib/format';
 
 const FEES = [
@@ -15,6 +18,23 @@ export function ProfileSection() {
   const wallet = useTonWallet();
   const address = useTonAddress();
   const user = getTgUser();
+
+  const [assets, setAssets] = useState<OwnedItem[] | null>(null);
+  const [auctioning, setAuctioning] = useState<OwnedItem | null>(null);
+
+  // Load the usernames the connected wallet owns (for the "auction your own" flow).
+  useEffect(() => {
+    if (!address) {
+      setAssets(null);
+      return;
+    }
+    let alive = true;
+    setAssets(null);
+    fetchOwnedUsernames(address).then((a) => alive && setAssets(a));
+    return () => {
+      alive = false;
+    };
+  }, [address]);
 
   return (
     <div className="container-app space-y-5 py-5">
@@ -76,6 +96,39 @@ export function ProfileSection() {
         </div>
       </div>
 
+      {/* Owned assets — auction your own collectibles */}
+      {wallet && (
+        <div className="space-y-2">
+          <label className="label-eyebrow">Your usernames</label>
+          <div className="card">
+            {assets === null ? (
+              <div className="space-y-2 p-3">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : assets.length === 0 ? (
+              <EmptyState icon={<Package className="h-7 w-7" />} title="No usernames here" hint="Usernames you own on this wallet can be put up for auction from here." />
+            ) : (
+              <div className="divide-y divide-god-border/40">
+                {assets.map((it) => (
+                  <div key={it.nftAddress} className="flex items-center justify-between px-4 py-3">
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-god-elevated font-display text-xs font-bold text-god-goldDeep">
+                        {it.username.slice(0, 2).toLowerCase()}
+                      </span>
+                      <span className="truncate text-sm font-medium text-god-cream">{it.name}</span>
+                    </span>
+                    <button className="btn-outline shrink-0 px-3 py-1.5 text-xs" onClick={() => setAuctioning(it)}>
+                      Auction
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Orders */}
       <div className="space-y-2">
         <label className="label-eyebrow">Your orders</label>
@@ -83,6 +136,8 @@ export function ProfileSection() {
           <EmptyState icon={<Receipt className="h-7 w-7" />} title="No orders yet" hint="Your Stars, Premium and bids will show up here." />
         </div>
       </div>
+
+      <AuctionItemSheet item={auctioning} open={!!auctioning} onClose={() => setAuctioning(null)} />
 
       <div className="flex flex-col gap-2 pt-1">
         <a href="https://fragment.com/about" target="_blank" rel="noreferrer" className="btn-ghost justify-between">
