@@ -116,7 +116,7 @@ export function AuctionItemSheet({
           <Field label="Opening bid" icon={<TrendingUp className="h-3.5 w-3.5" />}>
             <NumInput value={openingBid} onChange={setOpeningBid} suffix="GRAM" />
           </Field>
-          <Field label="Buy now (optional)" icon={<Zap className="h-3.5 w-3.5" />}>
+          <Field label="Buy now" icon={<Zap className="h-3.5 w-3.5" />}>
             <NumInput value={buyNow} onChange={setBuyNow} placeholder="none" suffix="GRAM" />
           </Field>
         </div>
