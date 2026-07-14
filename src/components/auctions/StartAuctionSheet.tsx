@@ -37,6 +37,7 @@ export function StartAuctionSheet({
   const isNumber = kind === 'number';
   const [name, setName] = useState('');
   const [info, setInfo] = useState<StartInfo | null>(null);
+  const [infoError, setInfoError] = useState<string | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
@@ -46,6 +47,7 @@ export function StartAuctionSheet({
     if (open) {
       setName((username ?? '').replace(isNumber ? /\D/g : /@/g, ''));
       setInfo(null);
+      setInfoError(null);
       setAmount('');
     }
   }, [open, username, isNumber]);
@@ -57,15 +59,21 @@ export function StartAuctionSheet({
   useEffect(() => {
     if (!open || !nameOk) {
       setInfo(null);
+      setInfoError(null);
       return;
     }
     let alive = true;
     setLoadingInfo(true);
     setInfo(null);
+    setInfoError(null);
     const t = setTimeout(async () => {
       try {
         const i = await getStartInfo(name.trim(), getInitData(), kind);
         if (alive) setInfo(i);
+      } catch (e) {
+        // Without this catch the failure was swallowed: info stayed null, the spinner
+        // stopped, and the sheet just sat there empty with no reason given.
+        if (alive) setInfoError(e instanceof Error ? e.message : 'Could not load Fragment info');
       } finally {
         if (alive) setLoadingInfo(false);
       }
@@ -146,6 +154,12 @@ export function StartAuctionSheet({
           <div className="space-y-3">
             <Skeleton className="h-14 w-full" />
             <Skeleton className="h-28 w-full" />
+          </div>
+        )}
+
+        {nameOk && !loadingInfo && infoError && (
+          <div className="rounded-2xl border border-god-danger/40 bg-god-danger/10 p-4 text-center text-sm text-god-danger">
+            {infoError}
           </div>
         )}
 

@@ -360,7 +360,9 @@ export interface StartInfo {
   ref: string;
   status?: UsernameStatus;
   initialMinNano: string;
-  hotWallet: string;
+  /** Absent until the operator wallet is configured. The sheet never uses it — the payment
+   *  destination comes from prepareStart() — so its absence must not block price + fee. */
+  hotWallet?: string;
   treasury: string;
 }
 
