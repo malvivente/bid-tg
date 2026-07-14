@@ -13,11 +13,11 @@ export function useAuctions() {
   const [sortKey, setSortKey] = useState<SortKey>('bid');
   const [sortAsc, setSortAsc] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setLoading(true);
     setError(null);
     try {
-      const [list, rate] = await Promise.all([fetchAuctions(), fetchTonUsd()]);
+      const [list, rate] = await Promise.all([fetchAuctions(500, force), fetchTonUsd(force)]);
       setAuctions(list);
       setTonUsd(rate);
     } catch (e) {
@@ -28,7 +28,7 @@ export function useAuctions() {
   }, []);
 
   useEffect(() => {
-    load();
+    load(); // first paint may use the cache
   }, [load]);
 
   const toggleSort = (key: SortKey) => {
@@ -64,6 +64,9 @@ export function useAuctions() {
     sortKey,
     sortAsc,
     toggleSort,
-    reload: load,
+    // Explicit wrapper, NOT `load` itself: passed straight to onClick, React would hand the
+    // click event in as `force` (truthy by accident). A manual refresh must always bypass
+    // the 45s cache, or it returns the same list and looks like the button is dead.
+    reload: () => load(true),
   };
 }

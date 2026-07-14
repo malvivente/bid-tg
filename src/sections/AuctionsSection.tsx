@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, ArrowDownUp, RefreshCw, Gavel, Flame, Rocket, Plus, ShoppingCart, Ban, Lock } from 'lucide-react';
+import { Search, ArrowDownUp, RefreshCw, Gavel, Flame, Rocket, ShoppingCart, Ban, Lock } from 'lucide-react';
 import { useAuctions, type SortKey } from '@/hooks/useAuctions';
 import { AuctionDetailSheet } from '@/components/auctions/AuctionDetailSheet';
 import { BidSheet } from '@/components/auctions/BidSheet';
@@ -79,13 +79,8 @@ export function AuctionsSection() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setStarting(a.query.trim() || '')}
-            className="flex items-center gap-1 rounded-xl border border-god-borderStrong px-3 py-2 text-xs font-medium text-god-gold transition-colors hover:bg-god-gold/10"
-          >
-            <Plus className="h-3.5 w-3.5" /> Start
-          </button>
-          <button
             onClick={a.reload}
+            aria-label="Refresh auctions"
             className="flex h-9 w-9 items-center justify-center rounded-xl border border-god-border text-god-muted transition-colors hover:text-god-gold"
           >
             <RefreshCw className={cn('h-4 w-4', a.loading && 'animate-spin')} />
@@ -305,7 +300,7 @@ function AuctionRow({
   return (
     <button
       onClick={onClick}
-      className="card card-hover flex w-full items-center gap-3 px-4 py-3 text-left"
+      className="card card-hover list-row flex w-full items-center gap-3 px-4 py-3 text-left"
     >
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-god-elevated font-display text-sm font-bold text-god-gold">
         {auction.username.slice(0, 2).toLowerCase()}

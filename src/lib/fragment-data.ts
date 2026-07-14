@@ -14,10 +14,13 @@ const TONAPI = (import.meta.env.VITE_TONAPI_BASE as string) || 'https://tonapi.i
 type CacheEntry<T> = { at: number; val?: T; inflight?: Promise<T> };
 const cacheStore = new Map<string, CacheEntry<unknown>>();
 
-async function memo<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
+async function memo<T>(key: string, ttlMs: number, fn: () => Promise<T>, force = false): Promise<T> {
   const e: CacheEntry<T> = (cacheStore.get(key) as CacheEntry<T> | undefined) ?? { at: 0 };
   const now = Date.now();
-  if (e.val !== undefined && now - e.at < ttlMs) return e.val;
+  // `force` skips the fresh-value shortcut (that's what a manual Refresh must do — otherwise
+  // it silently returns the cached list and looks broken), but still joins an in-flight
+  // request so a double-tap doesn't fire two fetches.
+  if (!force && e.val !== undefined && now - e.at < ttlMs) return e.val;
   if (e.inflight) return e.inflight;
   const inflight = fn()
     .then((val) => {
@@ -61,16 +64,16 @@ function minNextBidNano(priceNano: number, step = DEFAULT_BID_STEP): number {
   return Math.ceil(priceNano * (1 + step));
 }
 
-export async function fetchAuctions(limit = 500): Promise<Auction[]> {
+export async function fetchAuctions(limit = 500, force = false): Promise<Auction[]> {
   // Cached 45s: the auctions list barely changes second-to-second, and re-opening the
-  // Names tab shouldn't re-hit TonAPI each time.
+  // Names tab shouldn't re-hit TonAPI each time. `force` = the user pressed Refresh.
   return memo(`auctions:${limit}`, 45_000, async () => {
     const res = await fetch(`${TONAPI}/v2/dns/auctions?tld=t.me`);
     if (!res.ok) throw new Error(`TonAPI ${res.status}`);
     const json = await res.json();
     const rows: any[] = json.data ?? json.auctions ?? (Array.isArray(json) ? json : []);
     return rows.slice(0, limit).map(normalizeAuction).filter((a): a is Auction => !!a);
-  });
+  }, force);
 }
 
 function normalizeAuction(row: any): Auction | null {
@@ -258,7 +261,7 @@ export async function fetchOwnershipHistory(domain: string): Promise<OwnershipEn
   }
 }
 
-export async function fetchTonUsd(): Promise<number> {
+export async function fetchTonUsd(force = false): Promise<number> {
   // The GRAM/USD rate moves slowly — cache 3 min, dedupe concurrent callers, serve the
   // last good value on error. (App + every section poll this; without caching it was a 429 source.)
   return memo('rate:ton-usd', 180_000, async () => {
@@ -274,5 +277,5 @@ export async function fetchTonUsd(): Promise<number> {
       const json = await res.json();
       return Number(json['the-open-network'].usd) || 3.0;
     }
-  });
+  }, force);
 }

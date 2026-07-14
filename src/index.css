@@ -49,7 +49,8 @@
   body {
     margin: 0;
     min-height: 100vh;
-    background: #05060a;
+    /* NOTE: no background here on purpose — html carries the colour, and the aura lives on
+       the fixed ::before layer below. A background on body would paint OVER that layer. */
     color: #e6ebf0;
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 14px;
@@ -57,20 +58,34 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     overflow-x: hidden;
-    /* cyan neon aura from the top + a second cool glow, terminal-console vibe */
-    background-image:
-      radial-gradient(120% 60% at 50% -10%, rgba(95, 251, 241, 0.10), transparent 60%),
-      radial-gradient(80% 50% at 90% 5%, rgba(95, 251, 241, 0.05), transparent 55%);
-    background-attachment: fixed;
   }
 
-  /* Faint CRT scanlines over everything — the arcade/terminal texture. Non-interactive. */
+  /* The neon aura and the CRT scanlines are their OWN fixed layers, not body backgrounds.
+   * Why it matters (this is the Android scroll jank): `background-attachment: fixed` makes
+   * Chrome on Android repaint the whole background every scroll frame, and `mix-blend-mode`
+   * forces the entire viewport through a blended compositing pass. iOS composites both on
+   * the GPU and stays smooth, which is exactly why the lag showed up on Android only.
+   * As plain fixed layers they're rasterised once and merely composited while scrolling. */
+  body::before,
   body::after {
     content: '';
     position: fixed;
     inset: 0;
     pointer-events: none;
+  }
+
+  /* cyan neon aura from the top + a second cool glow, terminal-console vibe */
+  body::before {
+    z-index: -1;
+    background-image:
+      radial-gradient(120% 60% at 50% -10%, rgba(95, 251, 241, 0.1), transparent 60%),
+      radial-gradient(80% 50% at 90% 5%, rgba(95, 251, 241, 0.05), transparent 55%);
+  }
+
+  /* Faint CRT scanlines — plain lines, no blend mode (same look, a fraction of the cost). */
+  body::after {
     z-index: 100;
+    opacity: 0.6;
     background-image: repeating-linear-gradient(
       to bottom,
       rgba(255, 255, 255, 0.03) 0px,
@@ -78,8 +93,6 @@
       transparent 1px,
       transparent 3px
     );
-    mix-blend-mode: overlay;
-    opacity: 0.5;
   }
 
   /* Let inputs and content be selectable, block the rest for an app feel */
@@ -108,11 +121,21 @@
     padding-right: max(1rem, var(--safe-right));
   }
 
-  /* Terminal panel: hairline white border, faint cyan wash, subtle inner highlight */
+  /* Terminal panel: hairline white border, faint cyan wash, subtle inner highlight.
+   * No backdrop-filter: the cards sit on a flat dark ground, so blurring what's behind them
+   * was visually a no-op — but the auction list renders ~500 of these, and 500 backdrop-blur
+   * layers is what made Android crawl. */
   .card {
-    @apply relative rounded-2xl border border-god-border bg-god-card/90 shadow-card;
+    @apply relative rounded-2xl border border-god-border bg-god-card shadow-card;
     background-image: linear-gradient(160deg, rgba(95, 251, 241, 0.045), rgba(13, 16, 23, 0.2));
-    backdrop-filter: blur(6px);
+  }
+
+  /* Long-list row: let the browser skip rendering rows that are off-screen. The intrinsic
+   * size keeps the scrollbar honest so scrolling doesn't jump. This is what makes a
+   * 500-item list scroll like a short one. */
+  .list-row {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 68px;
   }
 
   .card-hover {
