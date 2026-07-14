@@ -1,0 +1,224 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --tg-viewport-height: 100vh;
+    --tg-viewport-stable-height: 100vh;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    /* the bid.tg neon accent, reused across effects */
+    --neon: #5ffbf1;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background: #05060a;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #05060a;
+    color: #e6ebf0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+    /* cyan neon aura from the top + a second cool glow, terminal-console vibe */
+    background-image:
+      radial-gradient(120% 60% at 50% -10%, rgba(95, 251, 241, 0.10), transparent 60%),
+      radial-gradient(80% 50% at 90% 5%, rgba(95, 251, 241, 0.05), transparent 55%);
+    background-attachment: fixed;
+  }
+
+  /* Faint CRT scanlines over everything — the arcade/terminal texture. Non-interactive. */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 100;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.03) 0px,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: overlay;
+    opacity: 0.5;
+  }
+
+  /* Let inputs and content be selectable, block the rest for an app feel */
+  body {
+    user-select: none;
+  }
+  input,
+  textarea,
+  [contenteditable],
+  .selectable {
+    user-select: text;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+  }
+}
+
+@layer components {
+  .container-app {
+    @apply mx-auto w-full max-w-[520px] px-4;
+  }
+
+  /* Terminal panel: hairline white border, faint cyan wash, subtle inner highlight */
+  .card {
+    @apply relative rounded-2xl border border-god-border bg-god-card/90 shadow-card;
+    background-image: linear-gradient(160deg, rgba(95, 251, 241, 0.045), rgba(13, 16, 23, 0.2));
+    backdrop-filter: blur(6px);
+  }
+
+  .card-hover {
+    @apply transition-all duration-200 hover:border-god-borderStrong hover:shadow-goldSoft;
+  }
+
+  /* Primary action — bright white slab with a cyan neon halo */
+  .btn-gold {
+    @apply relative inline-flex items-center justify-center gap-2 rounded-lg bg-gold-gradient px-5 py-3
+           text-sm font-semibold uppercase tracking-wider text-god-bg
+           transition-all duration-200 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none;
+    box-shadow: 0 0 22px -2px rgba(95, 251, 241, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  }
+  .btn-gold:hover {
+    box-shadow: 0 0 34px -2px rgba(95, 251, 241, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+
+  /* Outline / ghost button — cyan neon edge, fills white on hover */
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-god-borderStrong
+           bg-transparent px-5 py-3 text-sm font-medium uppercase tracking-wider text-god-goldDeep
+           transition-all duration-200 hover:bg-god-gold hover:text-god-bg active:scale-[0.97]
+           disabled:opacity-40 disabled:pointer-events-none;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm text-god-muted
+           transition-colors hover:bg-god-elevated hover:text-god-cream;
+  }
+
+  .input-field {
+    @apply w-full rounded-lg border border-god-border bg-god-surface px-4 py-3 font-mono text-base
+           text-god-cream placeholder:text-god-faint transition-colors
+           focus:border-god-goldDeep focus:outline-none focus:ring-1 focus:ring-god-goldDeep/50;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-md border border-god-border bg-god-elevated/70
+           px-3 py-1 text-xs font-medium text-god-muted;
+  }
+
+  .label-eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.2em] text-god-goldDeep/85;
+  }
+
+  .divider {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-god-border to-transparent;
+  }
+}
+
+@layer utilities {
+  /* legacy "gold" utility names kept; values are now white / cyan neon */
+  .text-gold {
+    color: #eef2f5;
+  }
+  .text-gold-light {
+    color: #ffffff;
+  }
+  .text-gradient-gold {
+    background: linear-gradient(135deg, #ffffff, #a9f2ec 70%, #5ffbf1);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .glow-gold {
+    box-shadow: 0 0 24px rgba(95, 251, 241, 0.45);
+  }
+  .text-glow {
+    text-shadow: 0 0 10px rgba(95, 251, 241, 0.55), 0 0 24px rgba(95, 251, 241, 0.35);
+  }
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgba(95, 251, 241, 0.05) 25%,
+      rgba(95, 251, 241, 0.12) 37%,
+      rgba(95, 251, 241, 0.05) 63%
+    );
+    background-size: 200% 100%;
+    @apply animate-shimmer rounded-md;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(10, 12, 18, 0.5);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(95, 251, 241, 0.28);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(95, 251, 241, 0.5);
+}
+::selection {
+  background: rgba(95, 251, 241, 0.3);
+  color: #ffffff;
+}
+
+/* Neon range slider */
+.god-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(95, 251, 241, 0.18);
+  outline: none;
+}
+.god-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffffff, #5ffbf1);
+  border: 2px solid #05060a;
+  box-shadow: 0 0 12px rgba(95, 251, 241, 0.6);
+  cursor: pointer;
+}
+.god-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffffff, #5ffbf1);
+  border: 2px solid #05060a;
+  box-shadow: 0 0 12px rgba(95, 251, 241, 0.6);
+  cursor: pointer;
+}
