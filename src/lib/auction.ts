@@ -103,11 +103,20 @@ function buildStartAuctionBody(config: Cell): Cell {
  */
 export const START_AUCTION_GAS = toNano('0.05');
 
+/**
+ * TonConnect validates message addresses with `isValidUserFriendlyAddress` — it rejects the
+ * raw `0:<hex>` form that TonAPI returns. Normalise to the canonical user-friendly bounceable
+ * `EQ…` (bounceable is correct when sending to a contract). Accepts raw or friendly input.
+ */
+function toConnectAddress(addr: string): string {
+  return Address.parse(addr.trim()).toString(); // { bounceable: true, urlSafe: true } by default
+}
+
 /** Build the TonConnect message: send `START_AUCTION_GAS` to the NFT item with the start body. */
 export function startAuctionMessage(nftItemAddress: string, p: AuctionConfigParams, minInitialBid?: bigint): TxMessage {
   const config = buildAuctionConfig(p, minInitialBid);
   return {
-    address: nftItemAddress,
+    address: toConnectAddress(nftItemAddress),
     amount: START_AUCTION_GAS.toString(),
     payload: buildStartAuctionBody(config).toBoc().toString('base64'),
   };
@@ -121,7 +130,7 @@ export function cancelAuctionMessage(nftItemAddress: string): TxMessage {
     .endCell()
     .toBoc()
     .toString('base64');
-  return { address: nftItemAddress, amount: START_AUCTION_GAS.toString(), payload };
+  return { address: toConnectAddress(nftItemAddress), amount: START_AUCTION_GAS.toString(), payload };
 }
 
 /** Map a telemint exit code (from a failed tx / emulation) to a human message. */
