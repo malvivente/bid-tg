@@ -1,6 +1,7 @@
 import type { StarsQuote, PremiumQuote, TopupQuote, BidPrepare, Auction, Order, ItemKind } from '@/types';
 import { feeStars, feePremium, feeBid, feeBuyNow, feeAdsTopup, feeStartAuction, TON } from './fee';
 import { makeRef } from './format';
+import { getStoredToken, type AuthUser } from './session';
 import {
   resolveItemLive,
   listNumbersLive,
@@ -44,10 +45,22 @@ function delay<T>(v: T, ms = 420): Promise<T> {
   return new Promise((r) => setTimeout(() => r(v), ms));
 }
 
+/**
+ * Authorization header for a backend call. In the Mini App `initData` is non-empty →
+ * `tma <initData>`. On the WEBSITE it's empty, so fall back to the stored web-login session
+ * → `Bearer <token>`. Neither present (guest) → no header, and the backend treats it as such.
+ */
+function authHeader(initData: string): Record<string, string> {
+  if (initData) return { Authorization: `tma ${initData}` };
+  const token = getStoredToken();
+  if (token) return { Authorization: `Bearer ${token}` };
+  return {};
+}
+
 async function post<T>(path: string, body: unknown, initData: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `tma ${initData}` },
+    headers: { 'Content-Type': 'application/json', ...authHeader(initData) },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -56,6 +69,24 @@ async function post<T>(path: string, body: unknown, initData: string): Promise<T
   }
   return res.json() as Promise<T>;
 }
+
+/**
+ * Exchange a Telegram Login Widget payload for a web session (token + user). Needs the real
+ * backend — web login can't be validated without the bot token, so there is no mock path.
+ */
+export async function loginWithTelegram(payload: Record<string, unknown>): Promise<{ token: string; user: AuthUser }> {
+  if (isMock) throw new Error('Web login needs the backend (VITE_API_BASE_URL) configured');
+  const res = await fetch(`${BASE}/api/auth/telegram`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error((await res.text().catch(() => '')) || `Login failed (${res.status})`);
+  return res.json() as Promise<{ token: string; user: AuthUser }>;
+}
+
+/** Whether web login is available (real backend configured). */
+export const webLoginAvailable = !isMock;
 
 export async function quoteStars(
   recipient: string,
@@ -200,7 +231,7 @@ export async function resolveItem(kind: ItemKind, name: string, initData: string
         ? `/api/gift/${encodeURIComponent(id)}`
         : `/api/username/${encodeURIComponent(id)}`;
   if (!isMock) {
-    const res = await fetch(`${BASE}${path}`, { headers: { Authorization: `tma ${initData}` } });
+    const res = await fetch(`${BASE}${path}`, { headers: { ...authHeader(initData) } });
     if (!res.ok) return { name: id, kind, status: 'unknown' };
     return res.json() as Promise<UsernameInfo>;
   }
@@ -232,7 +263,7 @@ export interface NumberListing {
 export async function listNumbers(initData: string, sort = 'ending'): Promise<NumberListing[]> {
   if (!isMock) {
     const res = await fetch(`${BASE}/api/numbers?sort=${encodeURIComponent(sort)}`, {
-      headers: { Authorization: `tma ${initData}` },
+      headers: { ...authHeader(initData) },
     });
     if (!res.ok) return [];
     const json = (await res.json()) as { numbers: NumberListing[] };
@@ -278,7 +309,7 @@ export interface GiftItem {
 /** Gift collections index. Real backend scrapes fragment.com/gifts; without it, the proxy does. */
 export async function listGiftCollections(initData: string): Promise<GiftCollection[]> {
   if (!isMock) {
-    const res = await fetch(`${BASE}/api/gifts`, { headers: { Authorization: `tma ${initData}` } });
+    const res = await fetch(`${BASE}/api/gifts`, { headers: { ...authHeader(initData) } });
     if (!res.ok) return [];
     return ((await res.json()) as { collections: GiftCollection[] }).collections ?? [];
   }
@@ -320,7 +351,7 @@ export async function searchGifts(q: GiftQuery, initData: string): Promise<GiftS
     for (const v of q.attrs?.Backdrop ?? []) p.append('backdrop', v);
     for (const v of q.attrs?.Symbol ?? []) p.append('symbol', v);
     const res = await fetch(`${BASE}/api/gifts/${encodeURIComponent(q.collection || 'all')}?${p.toString()}`, {
-      headers: { Authorization: `tma ${initData}` },
+      headers: { ...authHeader(initData) },
     });
     if (!res.ok) return { items: [], nextOffset: null };
     return (await res.json()) as GiftSearchResult;
@@ -338,7 +369,7 @@ export async function giftAttributes(collection: string, initData: string): Prom
   if (!collection || collection === 'all') return empty;
   if (!isMock) {
     const res = await fetch(`${BASE}/api/gifts/${encodeURIComponent(collection)}/attributes`, {
-      headers: { Authorization: `tma ${initData}` },
+      headers: { ...authHeader(initData) },
     });
     if (!res.ok) return empty;
     return (await res.json()) as GiftAttributes;

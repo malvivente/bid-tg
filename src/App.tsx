@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { TonConnectProvider } from '@/providers/TonConnectProvider';
+import { AuthProvider } from '@/lib/auth';
 import { ToastProvider } from '@/components/Toast';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
@@ -49,9 +50,11 @@ function AppContent() {
 export default function App() {
   return (
     <TonConnectProvider>
-      <ToastProvider>
-        <AppContent />
-      </ToastProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
+      </AuthProvider>
     </TonConnectProvider>
   );
 }

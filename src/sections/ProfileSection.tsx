@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useTonAddress, useTonWallet } from '@tonconnect/ui-react';
-import { Wallet, Star, Crown, Gavel, ShieldCheck, ExternalLink, Receipt, Package, Loader2 } from 'lucide-react';
+import { Wallet, Star, Crown, Gavel, ShieldCheck, ExternalLink, Receipt, Package, Loader2, LogOut } from 'lucide-react';
 import { ConnectButton } from '@/components/ConnectButton';
+import { TelegramLoginButton } from '@/components/TelegramLoginButton';
 import { EmptyState, Skeleton } from '@/components/ui';
 import { AuctionItemSheet } from '@/components/auctions/AuctionItemSheet';
 import { useToast } from '@/components/Toast';
 import { usePayment } from '@/hooks/usePayment';
 import { cancelAuctionMessage } from '@/lib/auction';
-import { getTgUser } from '@/lib/telegram';
+import { getTgUser, isTelegram } from '@/lib/telegram';
+import { useAuth } from '@/lib/auth';
+import { webLoginAvailable } from '@/lib/api';
 import { fetchOwnedUsernames, auctionStatusOf, type OwnedItem, type AuctionStatus } from '@/lib/fragment-data';
 import { shortAddr, endsText } from '@/lib/format';
 
@@ -20,10 +23,22 @@ const FEES = [
 export function ProfileSection() {
   const wallet = useTonWallet();
   const address = useTonAddress();
-  const user = getTgUser();
+  const auth = useAuth();
+  // Identity comes from the Mini App (getTgUser) OR the web login (auth.user), whichever applies.
+  const person = auth.user ?? getTgUser();
+  const inTelegram = isTelegram();
 
   const { pay } = usePayment();
   const toast = useToast();
+
+  async function handleLogin(payload: Record<string, unknown>) {
+    try {
+      await auth.login(payload);
+      toast('success', 'Signed in with Telegram');
+    } catch (e) {
+      toast('error', e instanceof Error ? e.message : 'Login failed');
+    }
+  }
   const [assets, setAssets] = useState<OwnedItem[] | null>(null);
   const [auctioning, setAuctioning] = useState<OwnedItem | null>(null);
   const [statuses, setStatuses] = useState<Record<string, AuctionStatus>>({});
@@ -92,23 +107,54 @@ export function ProfileSection() {
       {/* Identity */}
       <div className="card animate-fade-up p-5">
         <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-xl font-bold text-god-bg">
-            {user?.photo_url ? (
-              <img src={user.photo_url} alt="" className="h-full w-full rounded-2xl object-cover" />
+          <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-gold-gradient text-xl font-bold text-god-bg">
+            {person?.photo_url ? (
+              <img src={person.photo_url} alt="" className="h-full w-full object-cover" />
             ) : (
-              (user?.first_name?.[0] ?? 'G').toUpperCase()
+              (person?.first_name?.[0] ?? 'G').toUpperCase()
             )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate font-display text-lg font-bold text-god-cream">
-              {user ? `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim() : 'Guest'}
+              {person ? `${person.first_name ?? ''} ${person.last_name ?? ''}`.trim() || 'Telegram user' : 'Guest'}
             </div>
             <div className="text-xs text-god-muted">
-              {user?.username ? `@${user.username}` : 'Open in Telegram to sign in'}
+              {person?.username
+                ? `@${person.username}`
+                : person
+                  ? 'Signed in'
+                  : inTelegram
+                    ? 'Loading your Telegram account…'
+                    : 'Sign in to save your orders'}
             </div>
           </div>
+          {auth.loggedIn && (
+            <button
+              onClick={() => {
+                auth.logout();
+                toast('info', 'Signed out');
+              }}
+              aria-label="Log out"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-god-border text-god-muted transition-colors hover:text-god-danger"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Web login — shown only in a browser (not the Mini App) when not yet signed in */}
+      {!inTelegram && !auth.loggedIn && webLoginAvailable && (
+        <div className="space-y-2">
+          <label className="label-eyebrow">Sign in</label>
+          <div className="card flex flex-col items-center gap-2 p-4">
+            <p className="text-center text-[11px] text-god-faint">
+              Connect your Telegram account to keep your orders and bids across devices.
+            </p>
+            <TelegramLoginButton onAuth={handleLogin} />
+          </div>
+        </div>
+      )}
 
       {/* Wallet */}
       <div className="space-y-2">
