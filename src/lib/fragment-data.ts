@@ -134,6 +134,63 @@ export interface AuctionState {
  * Usernames only (DNS-resolvable); returns null for numbers/gifts/anything unresolvable,
  * so callers fall back to the list's heuristic minimum.
  */
+interface RawAuctionState {
+  exit: number;
+  bidderNull: boolean; // true = NO bids yet (⇒ cancellable)
+  bidNano: bigint;
+  minBidNano: bigint; // the minimum acceptable NEXT bid
+  endTime: number;
+}
+
+/**
+ * Read get_telemint_auction_state from the STACK, not `decoded`. Load-bearing: when an
+ * auction has ZERO bids the first stack item (the bidder) is a null slice, so TonAPI returns
+ * `decoded: undefined` and any decoded-based read silently fails on freshly-started auctions.
+ * Stack order (telemint): [bidder, bid, bid_ts, min_bid, end_time]. Verified live.
+ */
+async function readAuctionState(nftAddress: string): Promise<RawAuctionState | null> {
+  const res = await fetch(`${TONAPI}/v2/blockchain/accounts/${encodeURIComponent(nftAddress)}/methods/get_telemint_auction_state`);
+  if (!res.ok) return null;
+  const j = await res.json();
+  const exit = Number(j.exit_code ?? -1);
+  if (exit !== 0) return { exit, bidderNull: true, bidNano: 0n, minBidNano: 0n, endTime: 0 };
+  const s: any[] = j.stack ?? [];
+  const num = (i: number) => (s[i]?.type === 'num' ? BigInt(s[i].num) : 0n);
+  return {
+    exit,
+    bidderNull: !s[0] || s[0].type === 'null',
+    bidNano: num(1),
+    minBidNano: num(3),
+    endTime: Number(num(4)),
+  };
+}
+
+export type AuctionStatusKind = 'free' | 'cancellable' | 'live' | 'ended' | 'unknown';
+export interface AuctionStatus {
+  kind: AuctionStatusKind;
+  endsAt?: number;
+  currentBidNano?: string;
+}
+
+/**
+ * Per-item auction status for the "my assets" list. `cancellable` = an auction the owner
+ * started that has NO bids yet (the telemint contract only allows cancel with zero bids —
+ * once anyone bids it throws err::already_has_stakes 221). `live`/`ended` = has bids, locked.
+ */
+export async function auctionStatusOf(nftAddress: string): Promise<AuctionStatus> {
+  try {
+    const st = await readAuctionState(nftAddress);
+    if (!st) return { kind: 'unknown' };
+    if (st.exit === 219) return { kind: 'free' }; // err::no_auction → startable
+    if (st.exit !== 0) return { kind: 'unknown' };
+    if (st.bidderNull || st.bidNano <= 0n) return { kind: 'cancellable', endsAt: st.endTime };
+    const now = Math.floor(Date.now() / 1000);
+    return { kind: st.endTime > now ? 'live' : 'ended', endsAt: st.endTime, currentBidNano: st.bidNano.toString() };
+  } catch {
+    return { kind: 'unknown' };
+  }
+}
+
 export async function fetchAuctionState(domain: string): Promise<AuctionState | null> {
   const full = domain.endsWith('.t.me') ? domain : `${domain}.t.me`;
   return memo(`aucstate:${full}`, 8_000, async () => {
@@ -141,12 +198,12 @@ export async function fetchAuctionState(domain: string): Promise<AuctionState | 
       const dns = await (await fetch(`${TONAPI}/v2/dns/${full}`)).json();
       const nft = dns?.item?.address;
       if (!nft) return null;
-      const st = await (await fetch(`${TONAPI}/v2/blockchain/accounts/${nft}/methods/get_telemint_auction_state`)).json();
-      if (!st?.success || !st.decoded || st.decoded.min_bid == null) return null;
+      const st = await readAuctionState(nft);
+      if (!st || st.exit !== 0) return null; // no live auction on this item
       const out: AuctionState = {
-        currentBidNano: Number(st.decoded.bid),
-        minNextBidNano: Number(st.decoded.min_bid),
-        endsAt: Number(st.decoded.end_time),
+        currentBidNano: Number(st.bidNano),
+        minNextBidNano: Number(st.minBidNano),
+        endsAt: st.endTime,
       };
       try {
         const cfg = await (await fetch(`${TONAPI}/v2/blockchain/accounts/${nft}/methods/get_telemint_auction_config`)).json();

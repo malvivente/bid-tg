@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useTonAddress, useTonWallet } from '@tonconnect/ui-react';
-import { Wallet, Star, Crown, Gavel, ShieldCheck, ExternalLink, Receipt, Package } from 'lucide-react';
+import { Wallet, Star, Crown, Gavel, ShieldCheck, ExternalLink, Receipt, Package, Loader2 } from 'lucide-react';
 import { ConnectButton } from '@/components/ConnectButton';
 import { EmptyState, Skeleton } from '@/components/ui';
 import { AuctionItemSheet } from '@/components/auctions/AuctionItemSheet';
+import { useToast } from '@/components/Toast';
+import { usePayment } from '@/hooks/usePayment';
+import { cancelAuctionMessage } from '@/lib/auction';
 import { getTgUser } from '@/lib/telegram';
-import { fetchOwnedUsernames, type OwnedItem } from '@/lib/fragment-data';
-import { shortAddr } from '@/lib/format';
+import { fetchOwnedUsernames, auctionStatusOf, type OwnedItem, type AuctionStatus } from '@/lib/fragment-data';
+import { shortAddr, endsText } from '@/lib/format';
 
 const FEES = [
   { icon: Star, label: 'Stars', value: '1% · min 0.05 GRAM' },
@@ -19,22 +22,70 @@ export function ProfileSection() {
   const address = useTonAddress();
   const user = getTgUser();
 
+  const { pay } = usePayment();
+  const toast = useToast();
   const [assets, setAssets] = useState<OwnedItem[] | null>(null);
   const [auctioning, setAuctioning] = useState<OwnedItem | null>(null);
+  const [statuses, setStatuses] = useState<Record<string, AuctionStatus>>({});
+  const [cancelling, setCancelling] = useState<string | null>(null);
 
   // Load the usernames the connected wallet owns (for the "auction your own" flow).
   useEffect(() => {
     if (!address) {
       setAssets(null);
+      setStatuses({});
       return;
     }
     let alive = true;
     setAssets(null);
+    setStatuses({});
     fetchOwnedUsernames(address).then((a) => alive && setAssets(a));
     return () => {
       alive = false;
     };
   }, [address]);
+
+  // Per-item on-chain auction status → decides Auction vs Cancel vs locked. Sequential (owned
+  // lists are small) to avoid a TonAPI burst; buttons resolve as each status lands.
+  useEffect(() => {
+    if (!assets || assets.length === 0) return;
+    let alive = true;
+    (async () => {
+      for (const it of assets) {
+        if (!alive) return;
+        const st = await auctionStatusOf(it.nftAddress);
+        if (alive) setStatuses((s) => ({ ...s, [it.nftAddress]: st }));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [assets]);
+
+  async function cancelAuction(it: OwnedItem) {
+    setCancelling(it.nftAddress);
+    try {
+      // Re-check right before signing: a bid may have landed since the list loaded, and the
+      // contract throws 221 on cancel-after-bid. Cheaper to catch it here than to bounce.
+      const st = await auctionStatusOf(it.nftAddress);
+      if (st.kind !== 'cancellable') {
+        setStatuses((s) => ({ ...s, [it.nftAddress]: st }));
+        toast('error', st.kind === 'live' || st.kind === 'ended' ? `${it.name} already has bids — it can no longer be cancelled` : `No cancellable auction on ${it.name}`);
+        return;
+      }
+      const res = await pay([cancelAuctionMessage(it.nftAddress)]);
+      if (res.status === 'sent') {
+        toast('success', `Auction for ${it.name} cancelled`);
+        setStatuses((s) => ({ ...s, [it.nftAddress]: { kind: 'free' } }));
+      } else if (res.status === 'need_connect') {
+        toast('info', 'Connect your wallet to cancel');
+      }
+    } catch (e) {
+      toast('error', e instanceof Error ? e.message : 'Could not cancel the auction');
+    } finally {
+      setCancelling(null);
+    }
+  }
 
   return (
     <div className="container-app space-y-5 py-5">
@@ -110,19 +161,25 @@ export function ProfileSection() {
               <EmptyState icon={<Package className="h-7 w-7" />} title="No usernames here" hint="Usernames you own on this wallet can be put up for auction from here." />
             ) : (
               <div className="divide-y divide-god-border/40">
-                {assets.map((it) => (
-                  <div key={it.nftAddress} className="flex items-center justify-between px-4 py-3">
-                    <span className="flex items-center gap-2.5 min-w-0">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-god-elevated font-display text-xs font-bold text-god-goldDeep">
-                        {it.username.slice(0, 2).toLowerCase()}
+                {assets.map((it) => {
+                  const st = statuses[it.nftAddress];
+                  return (
+                    <div key={it.nftAddress} className="flex items-center justify-between gap-2 px-4 py-3">
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-god-elevated font-display text-xs font-bold text-god-goldDeep">
+                          {it.username.slice(0, 2).toLowerCase()}
+                        </span>
+                        <span className="truncate text-sm font-medium text-god-cream">{it.name}</span>
                       </span>
-                      <span className="truncate text-sm font-medium text-god-cream">{it.name}</span>
-                    </span>
-                    <button className="btn-outline shrink-0 px-3 py-1.5 text-xs" onClick={() => setAuctioning(it)}>
-                      Auction
-                    </button>
-                  </div>
-                ))}
+                      <AssetAction
+                        status={st}
+                        busy={cancelling === it.nftAddress}
+                        onAuction={() => setAuctioning(it)}
+                        onCancel={() => cancelAuction(it)}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -150,5 +207,46 @@ export function ProfileSection() {
 
       <p className="pb-2 text-center text-[10px] text-god-faint">bid.tg · powered by TON &amp; Fragment</p>
     </div>
+  );
+}
+
+/** The right-hand action for an owned item, chosen by its live on-chain auction status. */
+function AssetAction({
+  status,
+  busy,
+  onAuction,
+  onCancel,
+}: {
+  status?: AuctionStatus;
+  busy: boolean;
+  onAuction: () => void;
+  onCancel: () => void;
+}) {
+  if (!status) return <span className="shrink-0 text-[11px] text-god-faint">…</span>;
+  if (status.kind === 'cancellable') {
+    return (
+      <button
+        onClick={onCancel}
+        disabled={busy}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-god-danger/50 px-3 py-1.5 text-xs font-medium uppercase tracking-wider text-god-danger transition-colors hover:bg-god-danger/10 disabled:opacity-50"
+      >
+        {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+        Cancel
+      </button>
+    );
+  }
+  if (status.kind === 'live' || status.kind === 'ended') {
+    const ends = status.endsAt ? endsText(status.endsAt) : null;
+    return (
+      <span className="chip shrink-0 border-god-goldDeep/30 text-god-goldDeep">
+        {status.kind === 'live' && ends && !ends.closed ? `Live · ${ends.text}` : 'On auction'}
+      </span>
+    );
+  }
+  // 'free' or 'unknown' — offer to start one (the sheet re-checks before signing anyway)
+  return (
+    <button className="btn-outline shrink-0 px-3 py-1.5 text-xs" onClick={onAuction}>
+      Auction
+    </button>
   );
 }
