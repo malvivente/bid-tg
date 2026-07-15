@@ -27,6 +27,8 @@ interface SafeAreaInset {
 interface TelegramWebApp {
   initData: string;
   initDataUnsafe?: { user?: TgUser };
+  /** 'android' | 'android_x' | 'ios' | 'tdesktop' | 'macos' | 'weba' | 'webk' | 'web' | 'unigram' | 'unknown' */
+  platform?: string;
   colorScheme?: 'light' | 'dark';
   themeParams?: Record<string, string>;
   viewportStableHeight?: number;
@@ -80,16 +82,20 @@ export function initTelegram(): void {
     const h = w.viewportStableHeight;
     if (h) document.documentElement.style.setProperty('--tg-viewport-stable-height', `${h}px`);
 
-    // FULLSCREEN — Bot API 8.0+. The app then covers the whole screen and Telegram's close/
-    // menu buttons FLOAT OVER it, so layout must clear them: Telegram publishes the insets
-    // itself as --tg-safe-area-inset-* (device notch) and --tg-content-safe-area-inset-*
-    // (its own controls), which index.css folds into --safe-top/--safe-bottom. No JS layout
-    // needed — Telegram rewrites those vars on every change and the CSS reflows for free.
+    // FULLSCREEN — MOBILE ONLY, Bot API 8.0+. On a phone the app covers the whole screen and
+    // Telegram's close/menu buttons FLOAT OVER it, so layout must clear them: Telegram publishes
+    // the insets itself as --tg-safe-area-inset-* (device notch) and --tg-content-safe-area-inset-*
+    // (its own controls), which index.css folds into --safe-top/--safe-bottom. No JS layout needed.
     //
-    // The version gate is REQUIRED, not polish: requestFullscreen() THROWS on clients below
-    // 8.0 rather than no-op'ing. If the platform refuses (fullscreenFailed → UNSUPPORTED),
-    // we simply stay in expanded mode, which the same --safe-* vars already handle.
-    if (w.isVersionAtLeast?.('8.0')) {
+    // On DESKTOP (tdesktop/macos) fullscreen drags the mini-app window off-screen and hides the
+    // window controls, so the user can't move, resize, or close it — never request it there. The
+    // app just runs in Telegram's normal windowed frame, with its own controls reachable.
+    //
+    // The version gate is also REQUIRED: requestFullscreen() THROWS on clients below 8.0 rather
+    // than no-op'ing. If a mobile platform still refuses (fullscreenFailed → UNSUPPORTED) we stay
+    // in expanded mode, which the same --safe-* vars already handle.
+    const isMobile = w.platform === 'android' || w.platform === 'android_x' || w.platform === 'ios';
+    if (isMobile && w.isVersionAtLeast?.('8.0')) {
       w.onEvent?.('fullscreenChanged', () => {
         document.body.classList.toggle('is-fullscreen', !!w.isFullscreen);
       });
